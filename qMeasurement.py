@@ -12,36 +12,56 @@ import qGates as qg
 
 
 def first(state):
-    '''Assumes n == 2. Given an n-qbit state, measures the first qbit. Returns a pair (tuple of two items) consisting of a classical one-qbit state (either |0> or |1>) and an (n - 1)-qbit state.'''
-    sigma0 = math.sqrt(abs(state[0])**2 + abs(state[1]**2))
-    sigma1 = math.sqrt(abs(state[2])**2 + abs(state[3]**2))
+    '''Assumes n >= 1. Given an n-qbit state, measures the first qbit. Returns a pair (tuple of two items) consisting of a classical one-qbit state (either |0> or |1>) and an (n - 1)-qbit state.'''
+    sigma0, sigma1 = 0,0
+    for i in range(len(state) // 2):
+        sigma0 += abs(state[i])**2
+    for i in range(len(state) // 2, len(state)):
+        sigma1 += abs(state[i])**2
+    sigma0, sigma1 = math.sqrt(sigma0), math.sqrt(sigma1)
     if qu.equal(sigma0, qc.zero, 0.000001):    #first two cases avoid division by 0
-        ketChi = numpy.array([0 + 0j, 0 + 0j])
-        ketPsi = numpy.array([state[2], state[3]])
+        ketChi = numpy.zeros(len(state) // 2, dtype='complex128')
+        ketPsi = state[len(state) // 2:]
     elif qu.equal(sigma1, qc.zero, 0.000001):
-        ketPsi = numpy.array([0 + 0j, 0 + 0j])
-        ketChi = numpy.array([state[0], state[1]])
+        ketPsi = numpy.zeros(len(state) // 2, dtype='complex128')
+        ketChi = state[:len(state) // 2]
     else:
-        ketChi = (1 / sigma0) * numpy.array([state[0], state[1]])
-        ketPsi = (1 / sigma1) * numpy.array([state[2], state[3]])
+        ketChi = (1 / sigma0) * state[:len(state) // 2]
+        ketPsi = (1 / sigma1) * state[len(state) // 2:]
+    if len(ketChi) == 1:
+        ketChi = qc.one
+    if len(ketPsi) == 1:
+        ketPsi = qc.one
     if random.random() <= abs(sigma0)**2:
         return (qc.ket0, ketChi)
     else:
         return (qc.ket1, ketPsi)
 
 def last(state):
-    '''Assumes n == 2. Given an n-qbit state, measures the last qbit. Returns a pair consisting of an (n - 1)-qbit state and a classical 1-qbit state (either |0> or |1>).'''
-    sigma0 = math.sqrt(abs(state[0])**2 + abs(state[2]**2))
-    sigma1 = math.sqrt(abs(state[1])**2 + abs(state[3]**2))
+    '''Assumes n >= 1. Given an n-qbit state, measures the last qbit. Returns a pair consisting of an (n - 1)-qbit state and a classical 1-qbit state (either |0> or |1>).'''
+    sigma0, sigma1 = 0,0
+    #ketChi, ketPsi = numpy.array([], dtype='complex128'), numpy.array([], dtype='complex128')
+    for i in range(len(state)):
+        if i % 2 == 0:
+            sigma0 += abs(state[i])**2
+            #ketChi = numpy.append(ketChi, state[i])
+        else:
+            sigma1 += abs(state[i])**2
+            #ketPsi = numpy.append(ketPsi, state[i])
+    ketChi = numpy.fromiter((state[i] for i in range(len(state)) if i % 2 == 0), dtype='complex128')
+    ketPsi = numpy.fromiter((state[i] for i in range(len(state)) if i % 2 != 0), dtype='complex128')
+    sigma0, sigma1 = math.sqrt(sigma0), math.sqrt(sigma1)
     if qu.equal(sigma0, qc.zero, 0.000001):    #first two cases avoid division by 0
-        ketChi = numpy.array([0 + 0j, 0 + 0j])
-        ketPsi = numpy.array([state[1], state[3]])
+        ketChi = numpy.zeros(len(state) // 2, dtype='complex128')
     elif qu.equal(sigma1, qc.zero, 0.000001):
-        ketPsi = numpy.array([0 + 0j, 0 + 0j])
-        ketChi = numpy.array([state[0], state[2]])
+        ketPsi = numpy.zeros(len(state) // 2, dtype='complex128')
     else:
-        ketChi = (1 / sigma0) * numpy.array([state[0], state[2]])
-        ketPsi = (1 / sigma1) * numpy.array([state[1], state[3]])
+        ketChi = (1 / sigma0) * ketChi
+        ketPsi = (1 / sigma1) * ketPsi
+    if len(ketChi) == 1:
+        ketChi = qc.one
+    if len(ketPsi) == 1:
+        ketPsi = qc.one
     if random.random() <= abs(sigma0)**2:
         return (ketChi, qc.ket0)
     else:

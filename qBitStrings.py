@@ -1,5 +1,6 @@
 # We represent an n-bit string --- that is, an element of {0, 1}^n --- in Python as a tuple of 0s and 1s.
 import qConstants as qc
+import qGates as qg
 
 def string(n, m):
     '''Converts a non-negative Python integer m to its corresponding bit string. As necessary, pads with leading 0s to bring the number of bits up to n.'''
@@ -81,5 +82,5 @@ def string_to_state(string):
     corresponding to |string>'''
     state = bit_to_qbit(string[0])
     for i in range(1, len(string)):
-        state = qg.tensor(state, bit_to_qbit[i])
+        state = qg.tensor(state, bit_to_qbit(string[i]))
     return state

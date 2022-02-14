@@ -1,12 +1,12 @@
 
-
-
 import random
+import numpy
 
 import qConstants as qc
 import qUtilities as qu
 import qGates as qg
 import qMeasurement as qm
+import qBitStrings as qb
 
 
 
@@ -37,7 +37,47 @@ def deutsch(f):
     state = qg.application(hh, state)
     return qm.first(state)[0]
 
+def bernsteinVazirani(n, f):
+    '''Given n >= 1 and an (n + 1)-qbit gate F representing a function
+    f : {0, 1}^n -> {0, 1} defined by mod-2 dot product with an unknown delta
+    in {0, 1}^n, returns the list or tuple of n classical one-qbit states (each
+    |0> or |1>) corresponding to delta.'''
+    state = qg.power(qc.ket0, n)
+    state = qg.tensor(state, qc.ket1)
+    hLayer = qg.power(qc.h, n + 1)
+    state = qg.application(hLayer, state)
+    state = qg.application(f, state)
+    state = qg.application(hLayer, state)
+    delta = []
+    for i in range(n):
+        meas = qm.first(state)
+        delta.append(meas[0])
+        state = meas[1]
+    return delta
 
+def simon(n, f):
+    '''The inputs are an integer n >= 2 and an (n + (n - 1))-qbit gate F
+    representing a function f: {0, 1}^n -> {0, 1}^(n - 1) hiding an n-bit
+    string delta as in the Simon (1994) problem. Returns a list or tuple of n
+    classical one-qbit states (each |0> or |1>) corresponding to a uniformly
+    random bit string gamma that is perpendicular to delta.'''
+
+    state = qg.power(qc.ket0, n + n - 1)
+    hLayer = qg.power(qc.h, n)
+    firstLayer = qg.tensor(hLayer, qg.power(qc.i, n - 1))
+    state = qg.application(firstLayer, state)
+    state = qg.application(f, state)
+    # measure last n - 1 qbits to disentangle the input and output registers
+    for i in range(n - 1):
+        state = qm.last(state)[0]
+    state = qg.application(hLayer, state)
+    # measure the input register to get gamma
+    gamma = []
+    for i in range(n):
+        measurement = qm.first(state)
+        gamma.append(measurement[0])
+        state = measurement[1]
+    return gamma
 
 ### DEFINING SOME TESTS ###
 
@@ -102,13 +142,73 @@ def deutschTest():
         print("failed deutschTest fourth part")
         print("    result = " + str(resultOne))
 
+def bernsteinVaziraniTest(n):
+    delta = qb.string(n, random.randrange(0, 2**n))
+    def f(s):
+        return (qb.dot(s, delta),)
+    gate = qg.function(n, 1, f)
+    qbits = bernsteinVazirani(n, gate)
+    bits = tuple(map(qu.bitValue, qbits))
+    diff = qb.addition(delta, bits)
+    if diff == n * (0,):
+        print("passed bernsteinVaziraniTest")
+    else:
+        print("failed bernsteinVaziraniTest")
+        print("   delta = " + str(delta))
 
+def simonTest(n):
+    # Pick a non-zero delta uniformly randomly.
+    delta = qb.string(n, random.randrange(1, 2**n))
+    # Build a certain matrix M.
+    k = 0
+    while delta[k] == 0:
+        k += 1
+    m = numpy.identity(n, dtype=int)
+    m[:, k] = delta
+    mInv = m
+    # This f is a linear map with kernel {0, delta}. So it’s a valid example.
+    def f(s):
+        full = numpy.dot(mInv, s) % 2
+        full = tuple([full[i] for i in range(len(full))])
+        return full[:k] + full[k + 1:]
+    gate = qg.function(n, n - 1, f)
+
+    gamma_matrix = []
+    while len(gamma_matrix) < n - 1:
+        gamma = simon(n, gate)
+        gamma_row = [int(elt is qc.ket1) for elt in gamma]
+        gamma_matrix.append(gamma_row)
+        reduction = qb.reduction(gamma_matrix)
+        if reduction[-1] == [0] * n:
+            reduction.remove(reduction[-1])
+        gamma_matrix = reduction
+
+    print("FINAL GAMMA MATRIX: ", gamma_matrix)
+    prediction = [1] * n
+    #setting digits in prediction for rows with a single 1
+    for i in range(len(gamma_matrix)):
+        if gamma_matrix[i].count(1) == 1:
+            zero_index = gamma_matrix[i].index(1)
+            prediction[zero_index] = 0
+    prediction = tuple(prediction)
+
+    if delta == prediction:
+        print("passed simonTest")
+    else:
+        print("failed simonTest")
+        print(" delta = " + str(delta))
+        print(" prediction = " + str(prediction))
 
 ### RUNNING THE TESTS ###
 
 def main():
-    bennettTest(100000)
-    deutschTest()
+    # bennettTest(100000)
+    # deutschTest()
+    # bernsteinVaziraniTest(5)
+    simonTest(2)
+    simonTest(4)
+    simonTest(6)
+
 
 if __name__ == "__main__":
     main()
