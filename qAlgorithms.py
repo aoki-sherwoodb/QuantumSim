@@ -1,6 +1,7 @@
 
 import random
 import numpy
+import math
 
 import qConstants as qc
 import qUtilities as qu
@@ -79,7 +80,42 @@ def simon(n, f):
         state = measurement[1]
     return gamma
 
+def shor(n, f):
+    '''Assumes n >= 1. Given an (n + n)-qbit gate F representing a function
+    f: {0, 1}^n -> {0, 1}^n of the form f(l) = k^l % m, returns a list or tuple
+    of n classical one-qbit states (|0> or |1>) corresponding to the output of
+    Shor’s quantum circuit.'''
+    state = qg.power(qc.ket0, 2 * n)
+    hLayer = qg.tensor(qg.power(qc.h, n), qg.power(qc.i, n))
+    state = qg.application(hLayer, state)
+    state = qg.application(f, state)
+    for i in range(n):
+        state = qm.last(state)[0]
+    state = qg.application(qg.fourier(n), state)
+    output = []
+    for i in range(n):
+        measurement = qm.first(state)
+        output.append(measurement[0])
+        state = measurement[1]
+    return output
+
 ### DEFINING SOME TESTS ###
+
+def shorTest(n, m):
+    k = m
+    while math.gcd(k, m) != 1:
+        k = random.randint(1, m)
+
+    def f(l):
+        int_l = qb.integer(l)
+        kToTheL = qu.powerMod(k, int_l, m)
+        return qb.string(n, kToTheL)
+
+    gate = qg.function(n, n, f)
+    output = shor(n, gate)
+    b = qb.integer(qb.statelist_to_string(output))
+    print(b)
+    return
 
 def bennettTest(m):
     # Runs Bennett's core algorithm m times.
@@ -205,9 +241,12 @@ def main():
     # bennettTest(100000)
     # deutschTest()
     # bernsteinVaziraniTest(5)
-    simonTest(2)
-    simonTest(4)
-    simonTest(6)
+    # simonTest(2)
+    # simonTest(4)
+    # simonTest(6)
+    shorTest(4, 3)
+    shorTest(4, 4)
+    shorTest(5, 5)
 
 
 if __name__ == "__main__":

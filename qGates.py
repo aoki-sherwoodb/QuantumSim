@@ -55,6 +55,13 @@ def power(stateOrGate, m):
         result = tensor(result, stateOrGate)
     return result
 
+def fourier(n):
+    qft = numpy.zeros((2**n, 2**n), dtype='complex128')
+    for a in range(2**n):
+        for b in range(2**n):
+            qft[a, b] = numpy.exp(1j * 2 * numpy.pi * a * b / 2**n)
+    return (1 / 2**(n / 2)) * qft
+
 ### DEFINING SOME TESTS ###
 
 def applicationTest():
@@ -138,17 +145,57 @@ def functionTest(n, m):
             alpha = qb.next(alpha)
     print("passed functionTest")
 
+def fourierTest(n):
+    if n == 1:
+        # Explicitly check the answer.
+        t = fourier(1)
+        if qu.equal(t, qc.h, 0.000001):
+            print("passed fourierTest")
+        else:
+            print("failed fourierTest")
+            print(" got T = ...")
+            print(t)
+    else:
+        t = fourier(n)
+        # Check the first row and column.
+        const = pow(2, -n / 2) + 0j
+        for j in range(2**n):
+            if not qu.equal(t[0, j], const, 0.000001):
+                print("failed fourierTest first part")
+                print(" t = ")
+                print(t)
+                return
+        for i in range(2**n):
+            if not qu.equal(t[i, 0], const, 0.000001):
+                print("failed fourierTest first part")
+                print(" t = ")
+                print(t)
+                return
+        print("passed fourierTest first part")
+    # Check that T is unitary.
+    tStar = numpy.conj(numpy.transpose(t))
+    tStarT = numpy.matmul(tStar, t)
+    id = numpy.identity(2**n, dtype=qc.one.dtype)
+    if qu.equal(tStarT, id, 0.000001):
+        print("passed fourierTest second part")
+    else:
+        print("failed fourierTest second part")
+        print(" T^* T = ...")
+        print(tStarT)
+
+
 
 ### RUNNING THE TESTS ###
 
 def main():
-    applicationTest()
-    applicationTest()
-    tensorTest()
-    tensorTest()
-    functionTest(1,1)
-    functionTest(2,2)
-    functionTest(3,3)
+    # applicationTest()
+    # applicationTest()
+    # tensorTest()
+    # tensorTest()
+    # functionTest(1,1)
+    # functionTest(2,2)
+    # functionTest(3,3)
+    fourierTest(3)
 
 if __name__ == "__main__":
     main()

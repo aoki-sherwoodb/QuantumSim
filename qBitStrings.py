@@ -84,3 +84,12 @@ def string_to_state(string):
     for i in range(1, len(string)):
         state = qg.tensor(state, bit_to_qbit(string[i]))
     return state
+
+def statelist_to_string(statelist):
+    string = []
+    for elt in statelist:
+        if elt is qc.ket0:
+            string.append(0)
+        else:
+            string.append(1)
+    return string
