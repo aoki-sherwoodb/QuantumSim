@@ -1,6 +1,7 @@
 
 import random
 import numpy
+import math
 
 import qConstants as qc
 import qUtilities as qu
@@ -22,6 +23,7 @@ def tensor(a, b):
         product_index = 0
         for i in range(n):
             for j in range(m):
+                # multiply all values in b by each value in a in order
                 product[product_index] = a[i] * b[j]
                 product_index += 1
         return product
@@ -29,6 +31,7 @@ def tensor(a, b):
         product = numpy.zeros((n*m, n*m), dtype='complex128')
         for row in range(n*m):
             for col in range(n*m):
+                # multiply all values in b by each value in a in a grid
                 product[row,col] = a[row // m, col // m] * b[row % m, col % m]
         return product
 
@@ -56,13 +59,124 @@ def power(stateOrGate, m):
     return result
 
 def fourier(n):
+    '''builds the n-qbit QFT T using the definition'''
     qft = numpy.zeros((2**n, 2**n), dtype='complex128')
     for a in range(2**n):
         for b in range(2**n):
             qft[a, b] = numpy.exp(1j * 2 * numpy.pi * a * b / 2**n)
     return (1 / 2**(n / 2)) * qft
 
+def buildS(n):
+    '''Generates the n-qubit S matrix that swaps the last bit of a state to be
+    the first bit'''
+    if n == 2:
+        return qc.swap
+    else:
+        s = tensor(power(qc.i, n-2), qc.swap)
+        for k in range(1, n-2):
+            sLayer = tensor(tensor(power(qc.i, n-2-k), qc.swap), power(qc.i, k))
+            s = numpy.dot(sLayer, s)
+        sLayer = tensor(qc.swap, power(qc.i, n-2))
+        s = numpy.dot(sLayer, s)
+        return s
+
+def fourierRecursive(n):
+    '''Assumes n >= 1. Returns the n-qbit quantum Fourier transform gate T.
+    Computes T recursively rather than from the definition.'''
+    if n == 1:
+        return qc.h
+    else:
+        r = tensor(qc.i, fourierRecursive(n-1))
+        omega = numpy.exp(1j * 2 * numpy.pi / 2**(n))
+        s = buildS(n)
+        d = numpy.zeros((2**(n-1), 2**(n-1)), dtype='complex128')
+        for i in range(2**(n-1)):
+            d[i,i] = omega**i
+        I = power(qc.i, n-1)
+        q = numpy.dot(tensor(qc.h, I), qu.directSum(I, d))
+        return numpy.dot(q, numpy.dot(r, s))
+
+def distant(gate):
+    '''Given an (n + 1)-qbit gate U (such as a controlled-V gate, where V is
+    n-qbit), performs swaps to insert one extra wire between the first qbit and
+    the other n qbits. Returns an (n + 2)-qbit gate.'''
+    n = gate.shape[0] // 4
+    swapLayer = tensor(qc.swap, power(qc.i, n))
+    return numpy.dot(swapLayer, numpy.dot(tensor(qc.i, gate), swapLayer))
+
+def ccNot():
+    '''Returns the three-qbit ccNOT (i.e., Toffoli) gate. The gate is
+    implemented using five specific two-qbit gates and some SWAPs.'''
+    u = numpy.array([
+        [1 + 0j, 0 + 0j],
+        [0 + 0j, 0 - 1j]])
+    v = (1 / math.sqrt(2)) * numpy.array([
+        [1 + 0j, 0 + 1j],
+        [0 - 1j, -1 + 0j]])
+    cU = qu.directSum(qc.i, u)
+    cV = qu.directSum(qc.i, v)
+    cZ = qu.directSum(qc.i, qc.z)
+    cULayer = tensor(cU, qc.i)
+    cVLayer = distant(cV)
+    cZLayer = tensor(qc.i, cZ)
+    ccNOT = application(cULayer, application(cZLayer, application(cVLayer, application(cZLayer, cVLayer))))
+    return ccNOT
+
+def groverR3():
+    '''Assumes that n = 3. Returns -R, where R is Grover’s n-qbit gate for
+    reflection across |rho>. Builds the gate from one- and two-qbit gates,
+    rather than manually constructing the matrix.'''
+    hLayer = power(qc.h, 3)
+    xLayer = power(qc.x, 3)
+    bottomH = tensor(power(qc.i, 2), qc.h)
+    cZ = application(bottomH, application(ccNot(), bottomH))
+    minusR = application(hLayer, application(xLayer, application(cZ, application(xLayer, hLayer))))
+    return minusR
+
 ### DEFINING SOME TESTS ###
+
+def distantTest():
+    distantCNot = distant(qc.cnot)
+    zeros = tensor(qc.ket0, tensor(qc.ket0, qc.ket0))
+    middleOne = tensor(qc.ket0, tensor(qc.ket1, qc.ket0))
+    firstOne = tensor(qc.ket1, tensor(qc.ket0, qc.ket0))
+    middleZero = tensor(qc.ket1, tensor(qc.ket0, qc.ket1))
+    if not qu.equal(application(distantCNot, zeros), zeros, 0.000001):
+        print("failed distantTest on zeros")
+    if not qu.equal(application(distantCNot, middleOne), middleOne, 0.000001):
+        print("failed distantTest on middleOne")
+    if not qu.equal(application(distantCNot, firstOne), middleZero, 0.000001):
+        print("failed distantTest on firstOne")
+
+def ccNotTest():
+    gate = numpy.array([
+            [1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j, 0 + 0j],
+            [0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 1 + 0j],
+            [0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j]])
+    if qu.equal(ccNot(), gate, 0.000001):
+        print("passed ccNot test")
+    else:
+        print("failed ccNot test")
+        print(ccNot())
+
+def groverR3Test():
+    triplePlus = power(qc.ketPlus, 3)
+    def groverR3Result(state):
+        return state - (2 * triplePlus * application(triplePlus.T, state))
+
+    minusR = groverR3()
+    testState = qu.uniform(3)
+    if not qu.equal(application(minusR, testState), groverR3Result(testState), 0.00001):
+        print("failed groverR3Test")
+    else:
+        print("passed groverR3Test")
+
+
 
 def applicationTest():
     # These simple tests detect type errors but not much else.
@@ -183,19 +297,38 @@ def fourierTest(n):
         print(" T^* T = ...")
         print(tStarT)
 
-
+def fourierRecursiveTest(n):
+    t = fourier(n)
+    tRecursive = fourierRecursive(n)
+    for i in range(2**n):
+        for j in range(2**n):
+            if not qu.equal(t[i,j], tRecursive[i,j], 0.000001):
+                print("failed fourierRecursiveTest")
+                print(" t =", t[i,j])
+                print(" tRec =", tRecursive[i,j])
+                return
+    print("passed fourierRecursiveTest")
+    return
 
 ### RUNNING THE TESTS ###
 
 def main():
-    # applicationTest()
-    # applicationTest()
-    # tensorTest()
-    # tensorTest()
-    # functionTest(1,1)
-    # functionTest(2,2)
-    # functionTest(3,3)
+    applicationTest()
+    applicationTest()
+    tensorTest()
+    tensorTest()
+    functionTest(1,1)
+    functionTest(2,2)
+    functionTest(3,3)
     fourierTest(3)
+    fourierRecursiveTest(1)
+    fourierRecursiveTest(2)
+    fourierRecursiveTest(3)
+    fourierRecursiveTest(5)
+    distantTest()
+    ccNotTest()
+    groverR3Test()
+    return
 
 if __name__ == "__main__":
     main()

@@ -12,7 +12,9 @@ import qGates as qg
 
 
 def first(state):
-    '''Assumes n >= 1. Given an n-qbit state, measures the first qbit. Returns a pair (tuple of two items) consisting of a classical one-qbit state (either |0> or |1>) and an (n - 1)-qbit state.'''
+    '''Assumes n >= 1. Given an n-qbit state, measures the first qbit.
+    Returns a pair (tuple of two items) consisting of a classical one-qbit state
+    (either |0> or |1>) and an (n - 1)-qbit state.'''
     sigma0, sigma1 = 0,0
     for i in range(len(state) // 2):
         sigma0 += abs(state[i])**2
@@ -38,16 +40,15 @@ def first(state):
         return (qc.ket1, ketPsi)
 
 def last(state):
-    '''Assumes n >= 1. Given an n-qbit state, measures the last qbit. Returns a pair consisting of an (n - 1)-qbit state and a classical 1-qbit state (either |0> or |1>).'''
+    '''Assumes n >= 1. Given an n-qbit state, measures the last qbit.
+    Returns a pair consisting of an (n - 1)-qbit state and a classical 1-qbit state
+    (either |0> or |1>).'''
     sigma0, sigma1 = 0,0
-    #ketChi, ketPsi = numpy.array([], dtype='complex128'), numpy.array([], dtype='complex128')
     for i in range(len(state)):
         if i % 2 == 0:
             sigma0 += abs(state[i])**2
-            #ketChi = numpy.append(ketChi, state[i])
         else:
             sigma1 += abs(state[i])**2
-            #ketPsi = numpy.append(ketPsi, state[i])
     ketChi = numpy.fromiter((state[i] for i in range(len(state)) if i % 2 == 0), dtype='complex128')
     ketPsi = numpy.fromiter((state[i] for i in range(len(state)) if i % 2 != 0), dtype='complex128')
     sigma0, sigma1 = math.sqrt(sigma0), math.sqrt(sigma1)

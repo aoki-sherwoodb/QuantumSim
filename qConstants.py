@@ -30,6 +30,7 @@ h = numpy.array([
     [1 / math.sqrt(2) + 0j, 1 / math.sqrt(2) + 0j],
     [1 / math.sqrt(2) + 0j, -1 / math.sqrt(2) + 0j]])
 
+# Our favorite two-qbit gates.
 swap = numpy.array([
     [1 + 0j, 0 + 0j, 0 + 0j, 0 + 0j],
     [0 + 0j, 0 + 0j, 1 + 0j, 0 + 0j],

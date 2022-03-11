@@ -99,23 +99,99 @@ def shor(n, f):
         state = measurement[1]
     return output
 
+def grover(n, k, f):
+    '''Assumes n >= 1, k >= 1. Assumes that k is small compared to 2^n.
+    Implements the Grover core subroutine. The F parameter is an (n + 1)-qbit
+    gate representing a function f : {0, 1}^n -> {0, 1} such that
+    SUM_alpha f(alpha) = k. Returns a list or tuple of n classical one-qbit
+    states (either |0> or |1>), such that the corresponding n-bit string delta
+    usually satisfies f(delta) = 1.'''
+    state = qg.tensor(qg.power(qc.ket0, n), qc.ket1)
+    state = qg.application(qg.power(qc.h, n+1), state)
+    ketRho = qg.power(qc.ketPlus, n)
+    R = 2 * numpy.outer(ketRho.conjugate(), ketRho) - qg.power(qc.i, n)
+    t = numpy.arcsin(math.sqrt(k) * 2**(n / -2))
+    rotations = int(round(numpy.pi/(4*t) - 0.5))
+    for i in range(rotations):
+        state = qg.application(f, state)
+        state = qg.application(qg.tensor(R, qc.i), state)
+    delta = []
+    for i in range(n):
+        measurement = qm.first(state)
+        delta.append(measurement[0])
+        state = measurement[1]
+    return delta
+
 ### DEFINING SOME TESTS ###
+
+def groverTest(n, k):
+    # Pick k distinct deltas uniformly randomly.
+    deltas = []
+    while len(deltas) < k:
+        delta = qb.string(n, random.randrange(0, 2**n))
+        if not delta in deltas:
+            deltas.append(delta)
+    # Prepare the F gate.
+    def f(alpha):
+        for delta in deltas:
+            if alpha == delta:
+                return (1,)
+        return (0,)
+    fGate = qg.function(n, 1, f)
+    # Run Grover’s algorithm up to 10 times.
+    qbits = grover(n, k, fGate)
+    bits = tuple(map(qu.bitValue, qbits))
+    j = 1
+    while (not bits in deltas) and (j < 10):
+        qbits = grover(n, k, fGate)
+        bits = tuple(map(qu.bitValue, qbits))
+        j += 1
+    if bits in deltas:
+        print("passed groverTest in " + str(j) + " tries")
+    else:
+        print("failed groverTest")
+        print(" exceeded 10 tries")
+        print(" prediction = " + str(bits))
+        print(" deltas = " + str(deltas))
 
 def shorTest(n, m):
     k = m
     while math.gcd(k, m) != 1:
         k = random.randint(1, m)
+    #finding period by brute force
+    l = 1
+    while qu.powerMod(k, l, m) != 1:
+        l += 1
+    p = l
 
     def f(l):
         int_l = qb.integer(l)
         kToTheL = qu.powerMod(k, int_l, m)
         return qb.string(n, kToTheL)
 
-    gate = qg.function(n, n, f)
-    output = shor(n, gate)
-    b = qb.integer(qb.statelist_to_string(output))
-    print(b)
-    return
+    p_shor = 0
+    while True:
+        d, dprime = m, m
+        gate = qg.function(n, n, f)
+        b = qb.integer(qb.statelist_to_string(shor(n, gate)))
+        d = qu.continuedFraction(n, m, b / 2**n)[1]
+        if qu.powerMod(k, d, m) == 1 and d < m:
+            p_shor = d
+            break
+        bprime = qb.integer(qb.statelist_to_string(shor(n, gate)))
+        dprime = qu.continuedFraction(n, m, bprime / 2**n)[1]
+        if qu.powerMod(k, dprime, m) == 1 and dprime < m:
+            p_shor = dprime
+            break
+        lcm = d * dprime * math.gcd(d, dprime)
+        if qu.powerMod(k, lcm, m) == 1 and lcm < m:
+            p_shor = lcm
+            break
+    if p_shor == p:
+        print("passed shorTest")
+    else:
+        print("failed shorTest")
+        print("p:",p,"      Shor's p:", p_shor)
 
 def bennettTest(m):
     # Runs Bennett's core algorithm m times.
@@ -215,11 +291,9 @@ def simonTest(n):
         gamma_row = [int(elt is qc.ket1) for elt in gamma]
         gamma_matrix.append(gamma_row)
         reduction = qb.reduction(gamma_matrix)
-        if reduction[-1] == [0] * n:
+        if reduction[-1] == [0] * n or reduction[-1] == (0,) * n:
             reduction.remove(reduction[-1])
         gamma_matrix = reduction
-
-    print("FINAL GAMMA MATRIX: ", gamma_matrix)
     prediction = [1] * n
     #setting digits in prediction for rows with a single 1
     for i in range(len(gamma_matrix)):
@@ -238,15 +312,20 @@ def simonTest(n):
 ### RUNNING THE TESTS ###
 
 def main():
-    # bennettTest(100000)
-    # deutschTest()
-    # bernsteinVaziraniTest(5)
-    # simonTest(2)
-    # simonTest(4)
-    # simonTest(6)
+    bennettTest(100000)
+    deutschTest()
+    bernsteinVaziraniTest(5)
+    simonTest(2)
+    simonTest(4)
+    simonTest(6)
     shorTest(4, 3)
     shorTest(4, 4)
     shorTest(5, 5)
+    groverTest(4,1)
+    groverTest(5,1)
+    groverTest(5,3)
+    groverTest(6,2)
+    groverTest(6,4)
 
 
 if __name__ == "__main__":

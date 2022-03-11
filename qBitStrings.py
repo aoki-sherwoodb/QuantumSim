@@ -86,6 +86,7 @@ def string_to_state(string):
     return state
 
 def statelist_to_string(statelist):
+    '''takes a list of one-bit classical states and converts it into a bitstring'''
     string = []
     for elt in statelist:
         if elt is qc.ket0:
